@@ -9,32 +9,67 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Passo 1: Pull Request dispara o gatilho e baixa o código
+      # 1. Pull Request dispara o gatilho e baixa o código no servidor do GitHub
       - name: Checkout do Código
         uses: actions/checkout@v4
 
-      # Passo 2: Instalação de Dependências com Cache ativo
+      # 2. Valida o Dockerfile antes de qualquer execução (Hadolint)
+      - name: Validar boas práticas do Dockerfile (Hadolint)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: dockerfile
+          ignore: DL3018 # Ignora aviso de versão de pacotes no alpine para simplificar
+
+      # 3. Configura o ambiente Node.js ativando o cache de dependências
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
+      # 4. Instalação limpa e performática das dependências
       - name: Instalar Dependências
         run: npm ci
 
-      # Passo 3: Lint e Build
-      - name: Executar Linter (Análise Estática)
+      # 5. Executa a análise estática do código (ESLint já ignorando o script do k6)
+      - name: Executar Linter
         run: npm run lint
 
+      # 6. Executa a validação de Build da API
       - name: Executar Build da Aplicação
         run: npm run build
 
-      # Passo 4: Testes Automatizados (Garante cobertura mínima de 80%)
-      - name: Executar Testes Automatizados
+      # 7. Executa os testes unitários e de integração (Jest)
+      - name: Executar Testes Automatizados (Jest)
         run: npm run test
 
-      # Passo 5: Security Scan (Procura vulnerabilidades no código e pacotes)
+      # 8. Instala o k6 nativamente no Ubuntu do GitHub para compartilhar o mesmo localhost
+      - name: Instalar k6 nativamente no Runner
+        run: |
+          curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6 -y
+
+      # 9. Inicia a API salvando os logs e roda o teste de estresse em seguida
+      - name: Executar Teste de Carga (k6)
+        run: |
+          touch .env
+          npm start > api.log 2>&1 &
+          echo "Aguardando a API inicializar..."
+          sleep 5
+          k6 run tests/load-test.js
+        env:
+          NODE_ENV: production
+
+      # 10. Se a API crashar ou o k6 falhar, exibe o conteúdo do log no painel do GitHub
+      - name: Exibir logs da API em caso de falha
+        if: always()
+        run: |
+          echo "=== LOGS DA API ==="
+          cat api.log || echo "Arquivo de log não gerado."
+
+      # 11. Varredura de vulnerabilidades no sistema de arquivos e dependências (Trivy)
       - name: Varredura de Segurança (Trivy Security Scan)
         uses: aquasecurity/trivy-action@master
         with:
