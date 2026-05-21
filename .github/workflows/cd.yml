@@ -1,37 +1,66 @@
-name: Continuous Deployment (CD)
+name: Continuous Deployment (CD) - Production
 
 on:
   push:
-    branches: [ main ] # Passo 7: Dispara automaticamente ao commitar/dar merge na main
+    branches: [ main ]
+
+# Permissões explícitas necessárias para injetar artefactos no GHCR e criar Releases
+permissions:
+  packages: write
+  contents: write
 
 jobs:
-  deploy-staging:
-    name: Deploy to Staging
+  build-and-push-ghcr:
+    name: 📦 Build & Push Image to GHCR
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - name: Checkout do Código
+        uses: actions/checkout@v4
+
+      # Define uma tag de versão semântica baseada no ID do pipeline
+      - name: Definir Tag de Versão
+        id: version
+        run: echo "tag=v1.0.${{ github.run_number }}" >> $GITHUB_OUTPUT
+
+      # Autenticação zero-config utilizando o token seguro do GitHub Actions
+      - name: Autenticar no GitHub Container Registry (GHCR)
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # Compila o Dockerfile e envia as tags (versão incremental e a 'latest')
+      - name: Build e Push da Imagem Docker
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: |
+            ghcr.io/${{ github.repository }}/api-node:${{ steps.version.outputs.tag }}
+            ghcr.io/${{ github.repository }}/api-node:latest
+
+  create-github-release:
+    name: 🏷️ Cut GitHub Release
+    needs: build-and-push-ghcr
     runs-on: ubuntu-latest
     steps:
       - name: Checkout do Código
         uses: actions/checkout@v4
 
-      # Passo 8: Deploy para o ambiente de Homologação
-      - name: Simular Deploy em Staging
-        run: |
-          echo "Conectando ao cluster de Staging..."
-          echo "Efetuando deploy da nova versão da API..."
-          echo "Rodando testes de fumaça (Smoke Tests) em Staging..."
-          echo "Deploy em Staging concluído com sucesso!"
-
-  deploy-production:
-    name: Deploy to Production
-    needs: deploy-staging # Só executa se o deploy de staging passar 100%
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout do Código
-        uses: actions/checkout@v4
-
-      # Passo 9: Deploy para o ambiente de Produção (Estratégia de Rolling Update)
-      - name: Simular Deploy em Produção
-        run: |
-          echo "Iniciando processo de deploy em Produção..."
-          echo "Rodando migrações de banco de dados (Database Migrations)..."
-          echo "Atualizando containers de forma gradativa (Rolling Update)..."
-          echo "API atualizada com sucesso em ambiente produtivo sem downtime!"
+      # Cria um ponto de ancoragem (Release) na barra lateral do repositório
+      - name: Criar GitHub Release Oficial
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.build-and-push-ghcr.outputs.image_tag }}
+          name: Release ${{ needs.build-and-push-ghcr.outputs.image_tag }}
+          body: |
+            ## 🚀 O que mudou nesta versão?
+            * Artefacto compilado e publicado com sucesso no GHCR.
+            * Imagem Docker correspondente: `ghcr.io/${{ github.repository }}/api-node:${{ needs.build-and-push-ghcr.outputs.image_tag }}`
+            * Deploy gerado automaticamente a partir do commit: `${{ github.sha }}`
+          draft: false
+          prerelease: false
