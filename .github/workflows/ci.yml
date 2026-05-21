@@ -13,6 +13,13 @@ jobs:
       - name: Checkout do Código
         uses: actions/checkout@v4
 
+      # NOVO PASSO: Lint do Dockerfile (Hadolint)
+      - name: Validar boas práticas do Dockerfile (Hadolint)
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+          ignore: DL3018 # Ignora aviso de versão fixa de pacotes no alpine se quiser simplificar
+
       # Passo 2: Instalação de Dependências com Cache ativo
       - name: Configurar Node.js
         uses: actions/setup-node@v4
@@ -23,18 +30,32 @@ jobs:
       - name: Instalar Dependências
         run: npm ci
 
-      # Passo 3: Lint e Build
-      - name: Executar Linter (Análise Estática)
+      # Passo 3: Lint e Build do Código
+      - name: Executar Linter (Análise Estática Node)
         run: npm run lint
 
       - name: Executar Build da Aplicação
         run: npm run build
 
-      # Passo 4: Testes Automatizados (Garante cobertura mínima de 80%)
-      - name: Executar Testes Automatizados
+      # Passo 4: Testes Automatizados Unitários/Integração
+      - name: Executar Testes Automatizados (Jest)
         run: npm run test
 
-      # Passo 5: Security Scan (Procura vulnerabilidades no código e pacotes)
+      # NOVO PASSO: Teste de Carga Automatizado (k6)
+      - name: Subir API em Background para o Teste de Carga
+        run: npm start & 
+        env:
+          NODE_ENV: production
+
+      - name: Aguardar inicialização da API
+        run: sleep 3
+
+      - name: Executar Teste de Performance (k6 Load Test)
+        uses: grafana/k6-action@v0.3.1
+        with:
+          filename: tests/load-test.js
+
+      # Passo 5: Security Scan
       - name: Varredura de Segurança (Trivy Security Scan)
         uses: aquasecurity/trivy-action@master
         with:
