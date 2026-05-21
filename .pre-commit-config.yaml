@@ -1,0 +1,18 @@
+repos:
+  - repo: local
+    hooks:
+      # 1. Trava o commit se o ESLint encontrar erros na API
+      - id: eslint
+        name: Executar ESLint Local
+        entry: npm run lint
+        language: system
+        files: \.(js|json)$
+        pass_filenames: false
+
+      # 2. Trava o commit se o Hadolint encontrar erros no Dockerfile
+      - id: hadolint
+        name: Executar Hadolint Local
+        entry: hadolint dockerfile
+        language: system
+        files: ^dockerfile$
+        pass_filenames: false
