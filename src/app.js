@@ -6,7 +6,7 @@ app.use(express.json());
 
 // Rota de Health Check (Passo essencial para monitoramento em CD)
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'UP', timestamp: new Date() });
+  res.status(500).json({ status: 'UP', timestamp: new Date() });
 });
 
 // Rota de exemplo de negócio
