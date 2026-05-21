@@ -1,4 +1,4 @@
-name: Continuous Integration (CI)
+name: Continuous Integration (CI) - Kong DB-less
 
 on:
   pull_request:
@@ -9,41 +9,57 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Pull Request dispara o gatilho e baixa o código no servidor do GitHub
+      # 1. Baixa o código no servidor do GitHub
       - name: Checkout do Código
         uses: actions/checkout@v4
 
-      # 2. Valida o Dockerfile antes de qualquer execução (Hadolint)
+      # 2. Linter do Dockerfile
       - name: Validar boas práticas do Dockerfile (Hadolint)
         uses: hadolint/hadolint-action@v3.1.0
         with:
-          dockerfile: dockerfile
-          ignore: DL3018 # Ignora aviso de versão de pacotes no alpine para simplificar
+          dockerfile: Dockerfile
+          ignore: DL3018
 
-      # 3. Configura o ambiente Node.js ativando o cache de dependências
+      # 3. Configura o Node.js com Cache
       - name: Configurar Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
-      # 4. Instalação limpa e performática das dependências
+      # 4. Instala dependências da API
       - name: Instalar Dependências
         run: npm ci
 
-      # 5. Executa a análise estática do código (ESLint já ignorando o script do k6)
-      - name: Executar Linter
+      # 5. Validações estáticas e testes unitários da API
+      - name: Executar Linter da API
         run: npm run lint
 
-      # 6. Executa a validação de Build da API
       - name: Executar Build da Aplicação
         run: npm run build
 
-      # 7. Executa os testes unitários e de integração (Jest)
       - name: Executar Testes Automatizados (Jest)
         run: npm run test
 
-      # 8. Instala o k6 nativamente no Ubuntu do GitHub para compartilhar o mesmo localhost
+      # 6. INSTALAÇÃO DO DECK: Ferramenta de validação do Kong
+      - name: Instalar decK CLI (Kong GitOps)
+        run: |
+          curl -sL https://github.com/kong/deck/releases/download/v1.38.0/deck_1.38.0_linux_amd64.tar.gz | tar -xz
+          sudo mv deck /usr/local/bin/
+
+      # 7. VALIDAÇÃO DO KONG: Valida se o arquivo de rotas está correto antes de subir o container
+      - name: Validar Configuração Declarativa do Kong (decK validate)
+        run: deck validate -s kong.yaml
+
+      # 8. START DA API: Inicializa a API Node em background na porta 3000
+      - name: Subir API Node.js em Background
+        run: |
+          touch .env
+          npm start > api.log 2>&1 &
+        env:
+          NODE_ENV: production
+
+      # 9. INSTALAÇÃO DO K6
       - name: Instalar k6 nativamente no Runner
         run: |
           curl -fsSL https://dl.k6.io/key.gpg | sudo gpg --dearmor -o /usr/share/keyrings/k6-archive-keyring.gpg
@@ -51,25 +67,35 @@ jobs:
           sudo apt-get update
           sudo apt-get install k6 -y
 
-      # 9. Inicia a API salvando os logs e roda o teste de estresse em seguida
-      - name: Executar Teste de Carga (k6)
+      # 10. START DO KONG (DB-less): Sobe o gateway apontando para o kong.yaml e usando a rede host
+      - name: Subir Kong API Gateway em modo DB-less (Docker)
         run: |
-          touch .env
-          npm start > api.log 2>&1 &
-          echo "Aguardando a API inicializar..."
-          sleep 5
-          k6 run tests/load-test.js
-        env:
-          NODE_ENV: production
+          docker run -d --name kong-gateway \
+            --network host \
+            -e "KONG_DATABASE=off" \
+            -e "KONG_DECLARATIVE_CONFIG=/kong.yaml" \
+            -v $(pwd)/kong.yaml:/kong.yaml \
+            kong:3.6
+          
+          echo "Aguardando inicialização da API e do Kong..."
+          sleep 7
 
-      # 10. Se a API crashar ou o k6 falhar, exibe o conteúdo do log no painel do GitHub
-      - name: Exibir logs da API em caso de falha
+      # 11. TESTE DE CARGA NO GATEWAY: O k6 agora ataca a porta 8000 (Kong) em vez da 3000 (API)
+      - name: Executar Teste de Carga contra o Kong Gateway (k6)
+        run: k6 run tests/load-test.js
+        env:
+          TARGET_URL: http://localhost:8000
+
+      # 12. Troubleshooting: Mostra logs se algo der errado
+      - name: Exibir logs da API e do Kong em caso de falha
         if: always()
         run: |
-          echo "=== LOGS DA API ==="
-          cat api.log || echo "Arquivo de log não gerado."
+          echo "=== LOGS DA API NODE ==="
+          cat api.log || echo "Sem logs da API."
+          echo "=== LOGS DO KONG GATEWAY ==="
+          docker logs kong-gateway || echo "Kong não inicializou."
 
-      # 11. Varredura de vulnerabilidades no sistema de arquivos e dependências (Trivy)
+      # 13. Varredura de Segurança
       - name: Varredura de Segurança (Trivy Security Scan)
         uses: aquasecurity/trivy-action@master
         with:
