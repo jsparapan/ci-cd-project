@@ -1,4 +1,4 @@
-name: Continuous Integration (CI) - Kong DB-less
+name: Continuous Integration (CI)
 
 on:
   pull_request:
@@ -17,7 +17,7 @@ jobs:
       - name: Validar boas práticas do Dockerfile (Hadolint)
         uses: hadolint/hadolint-action@v3.1.0
         with:
-          dockerfile: Dockerfile
+          dockerfile: dockerfile
           ignore: DL3018
 
       # 3. Configura o Node.js com Cache
