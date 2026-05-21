@@ -1,0 +1,44 @@
+name: Continuous Integration (CI)
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  pipeline-ci:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Passo 1: Pull Request dispara o gatilho e baixa o código
+      - name: Checkout do Código
+        uses: actions/checkout@v4
+
+      # Passo 2: Instalação de Dependências com Cache ativo
+      - name: Configurar Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar Dependências
+        run: npm ci
+
+      # Passo 3: Lint e Build
+      - name: Executar Linter (Análise Estática)
+        run: npm run lint
+
+      - name: Executar Build da Aplicação
+        run: npm run build
+
+      # Passo 4: Testes Automatizados (Garante cobertura mínima de 80%)
+      - name: Executar Testes Automatizados
+        run: npm run test
+
+      # Passo 5: Security Scan (Procura vulnerabilidades no código e pacotes)
+      - name: Varredura de Segurança (Trivy Security Scan)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          ignore-unfixed: true
+          format: 'table'
+          severity: 'HIGH,CRITICAL'

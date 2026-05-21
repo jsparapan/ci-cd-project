@@ -1,0 +1,37 @@
+name: Continuous Deployment (CD)
+
+on:
+  push:
+    branches: [ main ] # Passo 7: Dispara automaticamente ao commitar/dar merge na main
+
+jobs:
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Código
+        uses: actions/checkout@v4
+
+      # Passo 8: Deploy para o ambiente de Homologação
+      - name: Simular Deploy em Staging
+        run: |
+          echo "Conectando ao cluster de Staging..."
+          echo "Efetuando deploy da nova versão da API..."
+          echo "Rodando testes de fumaça (Smoke Tests) em Staging..."
+          echo "Deploy em Staging concluído com sucesso!"
+
+  deploy-production:
+    name: Deploy to Production
+    needs: deploy-staging # Só executa se o deploy de staging passar 100%
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout do Código
+        uses: actions/checkout@v4
+
+      # Passo 9: Deploy para o ambiente de Produção (Estratégia de Rolling Update)
+      - name: Simular Deploy em Produção
+        run: |
+          echo "Iniciando processo de deploy em Produção..."
+          echo "Rodando migrações de banco de dados (Database Migrations)..."
+          echo "Atualizando containers de forma gradativa (Rolling Update)..."
+          echo "API atualizada com sucesso em ambiente produtivo sem downtime!"
