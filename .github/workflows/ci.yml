@@ -17,7 +17,7 @@ jobs:
       - name: Validar boas práticas do Dockerfile (Hadolint)
         uses: hadolint/hadolint-action@v3.1.0
         with:
-          dockerfile: Dockerfile
+          dockerfile: dockerfile
           ignore: DL3018 # Ignora aviso de versão fixa de pacotes no alpine se quiser simplificar
 
       # Passo 2: Instalação de Dependências com Cache ativo
