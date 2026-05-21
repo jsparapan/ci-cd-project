@@ -1,0 +1,23 @@
+repos:
+  - repo: local
+    hooks:
+      - id: eslint
+        name: Executar ESLint Local
+        entry: npm run lint
+        language: system
+        files: \.(js|json)$
+        pass_filenames: false
+
+      - id: hadolint
+        name: Executar Hadolint Local
+        entry: hadolint dockerfile
+        language: system
+        files: ^dockerfile$
+        pass_filenames: false
+  
+  - repo: https://github.com/sqlfluff/sqlfluff
+    rev: 4.2.1
+    hooks:
+      - id: sqlfluff-lint
+      
+      - id: sqlfluff-fix

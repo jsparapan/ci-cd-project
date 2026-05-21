@@ -1,0 +1,10 @@
+[sqlfluff]
+dialect = postgres
+
+templater = jinja
+
+exclude_rules = L031
+exclude_dir = target/
+
+[sqlfluff:indentation]
+tab_space_size = 4
